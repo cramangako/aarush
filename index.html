@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <title>Simple Forum</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-storage-compat.js"></script>
 </head>
 <body class="bg-gray-100 p-6">
   <div class="max-w-2xl mx-auto">
@@ -21,29 +25,59 @@
   </div>
 
   <script>
-    const API = "http://localhost:5000/api/posts";
+    // leaky leak
+    const firebaseConfig = {
+    apiKey: "AIzaSyDWNi5KGuKdfu-JmhusUG9Mn5D4vvTKQJ0",
+    authDomain: "aarush-cd682.firebaseapp.com",
+    projectId: "aarush-cd682",
+    storageBucket: "aarush-cd682.firebasestorage.app",
+    messagingSenderId: "852069180282",
+    appId: "1:852069180282:web:f8359ca8da4b367c74ecc3",
+    measurementId: "G-GCDKLWSFBX"
+};
+
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+    const storage = firebase.storage();
+
+    const postForm = document.getElementById("postForm");
+    const postsDiv = document.getElementById("posts");
 
     async function loadPosts() {
-      const res = await fetch(API);
-      const data = await res.json();
-      const container = document.getElementById("posts");
-      container.innerHTML = "";
-      data.forEach(post => {
+      postsDiv.innerHTML = "";
+      const snapshot = await db.collection("posts").orderBy("timestamp", "desc").get();
+      snapshot.forEach(doc => {
+        const post = doc.data();
         const div = document.createElement("div");
         div.className = "bg-white p-4 rounded shadow";
         div.innerHTML = `
           <p class="mb-2">${post.text}</p>
-          ${post.image ? `<img src="http://localhost:5000${post.image}" class="rounded">` : ""}
+          ${post.image ? `<img src="${post.image}" class="rounded">` : ""}
         `;
-        container.appendChild(div);
+        postsDiv.appendChild(div);
       });
     }
 
-    document.getElementById("postForm").addEventListener("submit", async e => {
+    postForm.addEventListener("submit", async e => {
       e.preventDefault();
-      const formData = new FormData(e.target);
-      await fetch(API, { method: "POST", body: formData });
-      e.target.reset();
+      const text = postForm.text.value;
+      const file = postForm.image.files[0];
+      let imageUrl = null;
+
+      if (file) {
+        const storageRef = storage.ref("uploads/" + Date.now() + "_" + file.name);
+        await storageRef.put(file);
+        imageUrl = await storageRef.getDownloadURL();
+      }
+
+      await db.collection("posts").add({
+        text,
+        image: imageUrl,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      });
+
+      postForm.reset();
       loadPosts();
     });
 
@@ -51,3 +85,4 @@
   </script>
 </body>
 </html>
+
