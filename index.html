@@ -4,15 +4,11 @@
   <meta charset="UTF-8">
   <title>Simple Forum</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Firebase SDK -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-storage-compat.js"></script>
 </head>
 <body class="bg-gray-100 p-6">
   <div class="max-w-2xl mx-auto">
     <h1 class="text-3xl font-bold mb-4">Simple Forum</h1>
-    
+
     <!-- Post Form -->
     <form id="postForm" class="bg-white p-4 rounded shadow mb-6">
       <textarea name="text" placeholder="Write something..." class="w-full p-2 border rounded mb-2"></textarea>
@@ -24,65 +20,81 @@
     <div id="posts" class="space-y-4"></div>
   </div>
 
-  <script>
-    // leaky leak
+  <!-- Firebase Modular SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-storage.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+
+    // ✅ Firebase config
     const firebaseConfig = {
-    apiKey: "AIzaSyDWNi5KGuKdfu-JmhusUG9Mn5D4vvTKQJ0",
-    authDomain: "aarush-cd682.firebaseapp.com",
-    projectId: "aarush-cd682",
-    storageBucket: "aarush-cd682.firebasestorage.app",
-    messagingSenderId: "852069180282",
-    appId: "1:852069180282:web:f8359ca8da4b367c74ecc3",
-    measurementId: "G-GCDKLWSFBX"
-};
+      apiKey: "AIzaSyDWNi5KGuKdfu-JmhusUG9Mn5D4vvTKQJ0",
+      authDomain: "aarush-cd682.firebaseapp.com",
+      projectId: "aarush-cd682",
+      storageBucket: "aarush-cd682.appspot.com", // ✅ fixed
+      messagingSenderId: "852069180282",
+      appId: "1:852069180282:web:f8359ca8da4b367c74ecc3",
+      measurementId: "G-GCDKLWSFBX"
+    };
 
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+    const auth = getAuth(app);
 
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
-    const storage = firebase.storage();
+    // ✅ Sign in anonymously
+    signInAnonymously(auth).catch(console.error);
 
     const postForm = document.getElementById("postForm");
     const postsDiv = document.getElementById("posts");
 
-    async function loadPosts() {
+    // ✅ Real-time posts
+    const postsRef = collection(db, "posts");
+    const q = query(postsRef, orderBy("timestamp", "desc"));
+
+    onSnapshot(q, (snapshot) => {
       postsDiv.innerHTML = "";
-      const snapshot = await db.collection("posts").orderBy("timestamp", "desc").get();
-      snapshot.forEach(doc => {
+      snapshot.forEach((doc) => {
         const post = doc.data();
         const div = document.createElement("div");
         div.className = "bg-white p-4 rounded shadow";
         div.innerHTML = `
-          <p class="mb-2">${post.text}</p>
+          <p class="mb-2">${post.text || ""}</p>
           ${post.image ? `<img src="${post.image}" class="rounded">` : ""}
         `;
         postsDiv.appendChild(div);
       });
-    }
+    });
 
-    postForm.addEventListener("submit", async e => {
+    // ✅ Handle form submission
+    postForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const text = postForm.text.value;
       const file = postForm.image.files[0];
       let imageUrl = null;
 
-      if (file) {
-        const storageRef = storage.ref("uploads/" + Date.now() + "_" + file.name);
-        await storageRef.put(file);
-        imageUrl = await storageRef.getDownloadURL();
+      try {
+        if (file) {
+          const storageRef = ref(storage, "uploads/" + Date.now() + "_" + file.name);
+          await uploadBytes(storageRef, file);
+          imageUrl = await getDownloadURL(storageRef);
+        }
+
+        await addDoc(postsRef, {
+          text,
+          image: imageUrl,
+          timestamp: serverTimestamp()
+        });
+
+        postForm.reset();
+      } catch (err) {
+        console.error("Error posting:", err);
+        alert("Failed to post. Check console for details.");
       }
-
-      await db.collection("posts").add({
-        text,
-        image: imageUrl,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      });
-
-      postForm.reset();
-      loadPosts();
     });
-
-    loadPosts();
   </script>
 </body>
 </html>
+
 
